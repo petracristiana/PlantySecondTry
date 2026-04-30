@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Planty 🌱</title>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Nunito', sans-serif;
+      background: #3DBBA0;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ─── SPARKLES ─────────────────────────────────────── */
+    .sparkle {
+      position: fixed;
+      pointer-events: none;
+      z-index: 0;
+      color: rgba(255,255,255,0.5);
+      animation: twinkle var(--d,3s) var(--delay,0s) infinite ease-in-out;
+    }
+    @keyframes twinkle {
+      0%,100% { opacity:.1; transform:scale(.8); }
+      50%      { opacity:.7; transform:scale(1.2); }
+    }
+
+    /* ─── MODAL ────────────────────────────────────────── */
+    .overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.55);
+      backdrop-filter: blur(6px);
+      z-index: 300;
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+    }
+    .overlay.hidden { display: none; }
+
+    .modal {
+      background: #EDF9F4;
+      border-radius: 28px;
+      width: 100%; max-width: 370px;
+      overflow: hidden;
+      box-shadow: 0 24px 64px rgba(0,0,0,.3);
+      animation: modalIn .35s cubic-bezier(.34,1.56,.64,1);
+    }
+    @keyframes modalIn { from{ transform:scale(.85) translateY(20px); opacity:0; } to{ transform:none; opacity:1; } }
+
+    .modal-top {
+      background: #3DBBA0;
+      padding: 24px 22px 18px;
+      text-align: center;
+      color: #fff;
+    }
+    .modal-icon { font-size: 2.8rem; }
+    .modal-top h2 { font-size: 1.25rem; font-weight: 900; margin-top: 6px; }
+    .modal-top p  { font-size: .8rem; opacity: .85; font-weight: 600; margin-top: 3px; }
+
+    .modal-body { padding: 20px 22px 6px; }
+    .field-group { margin-bottom: 14px; }
+    .field-group label {
+      display: block;
+      font-size: .7rem; font-weight: 800; color: #2D9F84;
+      text-transform: uppercase; letter-spacing: .5px;
+      margin-bottom: 5px;
+    }
+    .field-group input {
+      width: 100%; padding: 10px 14px;
+      border: 2px solid #C8E6C9; border-radius: 12px;
+      font-family: 'Nunito',sans-serif; font-size: .9rem; font-weight: 700;
+      background: #fff; color: #333; outline: none;
+      transition: border-color .2s;
+    }
+    .field-group input:focus { border-color: #3DBBA0; }
+    .field-group input::placeholder { color: #ccc; font-weight: 600; }
+
+    .modal-tip {
+      font-size: .7rem; color: #aaa; font-weight: 700;
+      margin-bottom: 14px; line-height: 1.45;
+    }
+    .modal-status {
+      min-height: 24px; font-size: .78rem; font-weight: 800;
+      text-align: center; padding: 4px 0 10px;
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+    }
+    .modal-status.err { color: #E53935; }
+    .modal-status.ok  { color: #2D9F84; }
+
+    .modal-btns { padding: 4px 22px 22px; display: flex; flex-direction: column; gap: 10px; }
+
+    .btn-primary {
+      background: #3DBBA0; color: #fff;
+      border: none; border-radius: 50px; padding: 13px;
+      font-family: 'Nunito',sans-serif; font-size: .93rem; font-weight: 900;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      transition: background .2s;
+    }
+    .btn-primary:hover { background: #2D9F84; }
+    .btn-primary:disabled { opacity: .55; cursor: not-allowed; }
+
+    .btn-outline {
+      background: transparent; color: #3DBBA0;
+      border: 2px solid #3DBBA0; border-radius: 50px; padding: 11px;
+      font-family: 'Nunito',sans-serif; font-size: .88rem; font-weight: 800;
+      cursor: pointer; transition: background .2s;
+    }
+    .btn-outline:hover { background: #E0F5EE; }
+
+    .spin {
+      width: 15px; height: 15px;
+      border: 2.5px solid rgba(255,255,255,.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .65s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ─── TOP BAR ──────────────────────────────────────── */
+    .topbar {
+      position: relative; z-index: 1;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 22px 22px 6px;
+      color: #fff;
+    }
+    .tb-left h1 { font-size: 2rem; font-weight: 900; line-height: 1; }
+    .tb-left p  { font-size: .78rem; font-weight: 700; opacity: .8; margin-top: 2px; }
+
+    .tb-right { display: flex; align-items: center; gap: 10px; }
+
+    .live-pill {
+      display: flex; align-items: center; gap: 6px;
+      background: rgba(255,255,255,.2); border-radius: 50px;
+      padding: 5px 13px;
+      font-size: .68rem; font-weight: 900; color: #fff;
+    }
+    .live-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #69F0AE;
+      animation: pulse 1.8s infinite;
+    }
+    .live-dot.wait   { background: #FFD54F; animation: none; }
+    .live-dot.dead   { background: #EF5350; animation: none; }
+    @keyframes pulse { 0%,100%{ transform:scale(1); opacity:1; } 50%{ transform:scale(1.4); opacity:.5; } }
+
+    .since { font-size: .68rem; font-weight: 700; color: rgba(255,255,255,.65); }
+
+    .icon-btn {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: rgba(255,255,255,.2); border: none; color: #fff;
+      font-size: 1rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .2s;
+    }
+    .icon-btn:hover { background: rgba(255,255,255,.35); }
+
+    /* ─── HERO ─────────────────────────────────────────── */
+    .hero-sub {
+      position: relative; z-index: 1;
+      text-align: center; color: #fff;
+      font-size: .88rem; font-weight: 700; opacity: .85;
+      padding: 5px 20px 16px;
+    }
+
+    /* ─── CARDS ROW ────────────────────────────────────── */
+    .cards-row {
+      position: relative; z-index: 1;
+      display: flex; justify-content: center; align-items: flex-end;
+      gap: 13px; padding: 0 16px 26px;
+      overflow-x: auto;
+    }
+
+    /* phone card */
+    .card {
+      flex-shrink: 0;
+      background: #EDF9F4;
+      border-radius: 28px; width: 162px;
+      box-shadow: 0 10px 36px rgba(0,0,0,.18);
+      overflow: hidden; cursor: pointer;
+      transition: transform .25s cubic-bezier(.34,1.56,.64,1), box-shadow .25s;
+    }
+    .card:hover {
+      transform: translateY(-10px) scale(1.04);
+      box-shadow: 0 22px 52px rgba(0,0,0,.22);
+    }
+    .card.pop     { animation: cardpop .35s cubic-bezier(.34,1.56,.64,1); }
+    .card.ring    { animation: cardring .5s ease-out; }
+    @keyframes cardpop  { 0%{ transform:scale(1); } 50%{ transform:scale(1.08) translateY(-6px); } 100%{ transform:scale(1); } }
+    @keyframes cardring { 0%,100%{ box-shadow:0 10px 36px rgba(0,0,0,.18); } 50%{ box-shadow:0 0 0 4px #3DBBA0,0 10px 36px rgba(0,0,0,.18); } }
+
+    /* status bar */
+    .sbar {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 7px 12px 3px;
+      font-size: .56rem; color: #bbb; font-weight: 700;
+    }
+    .sigbars { display: flex; gap: 2px; align-items: flex-end; }
+    .sigbars span { width: 3px; background: #ccc; border-radius: 1px; }
+    .sigbars span:nth-child(1){height:4px}
+    .sigbars span:nth-child(2){height:6px}
+    .sigbars span:nth-child(3){height:8px}
+    .sigbars span:nth-child(4){height:10px}
+
+    /* card body */
+    .card-body { display: flex; flex-direction: column; align-items: center; padding: 4px 12px 8px; }
+    .card-svg  { width: 90px; height: 118px; }
+    .card-val  { font-size: 1.6rem; font-weight: 900; color: #2D9F84; line-height: 1; margin-top: 4px; }
+    .card-unit { font-size: .7rem; font-weight: 700; }
+    .card-lbl  { font-size: .62rem; color: #bbb; font-weight: 800; text-transform: uppercase; letter-spacing: .6px; margin-top: 2px; }
+    .card-msg  { font-size: .7rem; color: #555; text-align: center; margin: 7px 0 4px; font-weight: 700; line-height: 1.35; }
+
+    /* card footer */
+    .card-foot { display: flex; justify-content: space-between; align-items: center; padding: 6px 12px 12px; }
+    .dots      { display: flex; gap: 4px; align-items: center; }
+    .dot       { height: 4px; border-radius: 2px; background: #ddd; transition: all .3s; }
+    .dot.on    { background: #3DBBA0; width: 16px; }
+    .dot.off   { width: 7px; }
+    .card-skip { font-size: .67rem; color: #3DBBA0; font-weight: 800; background: none; border: none; cursor: pointer; font-family: inherit; }
+
+    /* ─── ACTION ROW ───────────────────────────────────── */
+    .actions {
+      position: relative; z-index: 1;
+      display: flex; justify-content: center; gap: 12px;
+      padding: 0 20px 30px; flex-wrap: wrap;
+    }
+    .fab {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 26px; border-radius: 50px;
+      background: #fff; color: #2D9F84;
+      font-family: inherit; font-size: .9rem; font-weight: 900;
+      border: none; cursor: pointer;
+      box-shadow: 0 6px 22px rgba(0,0,0,.11);
+      transition: all .2s cubic-bezier(.34,1.56,.64,1);
+    }
+    .fab:hover  { transform: scale(1.07); box-shadow: 0 10px 28px rgba(0,0,0,.17); }
+    .fab:active { transform: scale(.96); }
+    .fab.shake  { animation: fshake .4s ease-in-out; }
+    @keyframes fshake { 0%,100%{transform:rotate(0)} 25%{transform:rotate(-5deg)} 75%{transform:rotate(5deg)} }
+
+    /* ─── CHARTS SECTION ───────────────────────────────── */
+    .charts-wrap {
+      position: relative; z-index: 1;
+      background: #F0FAF6;
+      border-radius: 30px 30px 0 0;
+      padding: 26px 20px 48px;
+    }
+    .charts-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 18px;
+    }
+    .charts-title { font-size: 1.1rem; font-weight: 900; color: #2D9F84; }
+    .entry-pill {
+      font-size: .7rem; font-weight: 800; color: #2D9F84;
+      background: #D4F0E8; border-radius: 20px; padding: 3px 11px;
+    }
+    .charts-grid {
+      display: grid; grid-template-columns: repeat(2,1fr);
+      gap: 14px; max-width: 860px; margin: 0 auto;
+    }
+    @media(max-width:620px) {
+      .charts-grid { grid-template-columns: 1fr; }
+      .card { width: 140px; }
+      .cards-row { gap: 9px; }
+    }
+
+    .chart-tile {
+      background: #fff;
+      border-radius: 18px;
+      box-shadow: 0 4px 14px rgba(0,0,0,.06);
+      overflow: hidden;
+    }
+    .chart-head {
+      background: #3DBBA0; color: #fff;
+      padding: 9px 14px;
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: .79rem; font-weight: 800;
+    }
+    .chart-cur { font-size: .69rem; opacity: .88; font-weight: 700; }
+    .chart-body { padding: 10px 10px 4px; height: 174px; position: relative; }
+    .chart-body canvas { width: 100%!important; height: 100%!important; }
+    .chart-foot { text-align: right; padding: 2px 12px 7px; font-size: .6rem; color: #ccc; font-weight: 700; }
+
+    /* ─── TOAST ────────────────────────────────────────── */
+    .toast {
+      position: fixed; bottom: 22px; left: 50%;
+      transform: translateX(-50%) translateY(90px);
+      background: #fff; color: #333;
+      padding: 10px 22px; border-radius: 50px;
+      font-size: .82rem; font-weight: 800;
+      box-shadow: 0 8px 28px rgba(0,0,0,.12);
+      border-left: 4px solid #3DBBA0;
+      z-index: 999; pointer-events: none;
+      transition: transform .4s cubic-bezier(.34,1.56,.64,1);
+      white-space: nowrap;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* ─── DROPS ────────────────────────────────────────── */
+    .drop {
+      position: fixed; pointer-events: none; z-index: 999;
+      font-size: 1.3rem;
+      animation: fall 1.1s ease-in forwards;
+    }
+    @keyframes fall { 0%{opacity:1;transform:translateY(0)} 100%{opacity:0;transform:translateY(140px) scale(.3)} }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════ SETTINGS MODAL ════════════════ -->
+<div class="overlay hidden" id="overlay">
+  <div class="modal">
+    <div class="modal-top">
+      <div class="modal-icon">🌱</div>
+      <h2>Connect to ThingSpeak</h2>
+      <p>Your board sends data → we show it live here</p>
+    </div>
+    <div class="modal-body">
+      <div class="field-group">
+        <label>Channel ID</label>
+        <input id="inp-ch" type="text" placeholder="e.g.  2345678" autocomplete="off">
+      </div>
+      <div class="field-group">
+        <label>Read API Key</label>
+        <input id="inp-key" type="text" placeholder="e.g.  ABCDEF1234567890" autocomplete="off">
+      </div>
+      <p class="modal-tip">💡 ThingSpeak → My Channels → your channel → API Keys tab</p>
+      <div class="modal-status" id="modal-status"></div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-primary" id="btn-conn" onclick="doConnect()">🔌 Connect</button>
+      <button class="btn-outline" onclick="doDemo()">🌿 Demo Mode — no account needed</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ SPARKLES ══════════════════════ -->
+<div id="stars"></div>
+
+<!-- ═══════════════ TOP BAR ═══════════════════════ -->
+<div class="topbar">
+  <div class="tb-left">
+    <h1>Planty 🌱</h1>
+    <p id="ch-name">Your Plant Monitor</p>
+  </div>
+  <div class="tb-right">
+    <div class="live-pill">
+      <div class="live-dot wait" id="ldot"></div>
+      <span id="ltext">WAITING</span>
+    </div>
+    <span class="since" id="since"></span>
+    <button class="icon-btn" onclick="openModal()" title="Settings">⚙️</button>
+  </div>
+</div>
+<p class="hero-sub" id="hero-sub">Connecting to your plant…</p>
+
+<!-- ═══════════════ SENSOR CARDS ══════════════════ -->
+<div class="cards-row" id="cards-row"></div>
+
+<!-- ═══════════════ ACTIONS ═══════════════════════ -->
+<div class="actions">
+  <button class="fab" id="btn-ref" onclick="doRefresh()">🔄 Refresh Now</button>
+  <button class="fab" onclick="openModal()">⚙️ Settings</button>
+</div>
+
+<!-- ═══════════════ CHARTS ════════════════════════ -->
+<div class="charts-wrap">
+  <div class="charts-header">
+    <div class="charts-title">📊 Live Sensor Data</div>
+    <div class="entry-pill" id="epill">0 entries</div>
+  </div>
+  <div class="charts-grid">
+    <div class="chart-tile">
+      <div class="chart-head"><span id="hl1">☀️ Field 1</span><span class="chart-cur" id="cv1">—</span></div>
+      <div class="chart-body"><canvas id="ch1"></canvas></div>
+      <div class="chart-foot">Planty · ThingSpeak</div>
+    </div>
+    <div class="chart-tile">
+      <div class="chart-head"><span id="hl2">🎯 Field 2</span><span class="chart-cur" id="cv2">—</span></div>
+      <div class="chart-body"><canvas id="ch2"></canvas></div>
+      <div class="chart-foot">Planty · ThingSpeak</div>
+    </div>
+    <div class="chart-tile">
+      <div class="chart-head"><span id="hl3">🌡️ Field 3</span><span class="chart-cur" id="cv3">—</span></div>
+      <div class="chart-body"><canvas id="ch3"></canvas></div>
+      <div class="chart-foot">Planty · ThingSpeak</div>
+    </div>
+    <div class="chart-tile">
+      <div class="chart-head"><span id="hl4">💧 Field 4</span><span class="chart-cur" id="cv4">—</span></div>
+      <div class="chart-body"><canvas id="ch4"></canvas></div>
+      <div class="chart-foot">Planty · ThingSpeak</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ TOAST ═════════════════════════ -->
+<div class="toast" id="toast"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════
+   SPARKLES
+═══════════════════════════════════════════════════════ */
+(function(){
+  const box = document.getElementById('stars');
+  '✦✧⋆✶✷'.split('').forEach(ch => {
+    for(let i=0;i<5;i++){
+      const el=document.createElement('div');
+      el.className='sparkle'; el.textContent=ch;
+      el.style.cssText=`left:${Math.random()*100}%;top:${Math.random()*55}%;`+
+        `font-size:${10+Math.random()*12}px;--d:${2+Math.random()*4}s;--delay:${Math.random()*5}s`;
+      box.appendChild(el);
+    }
+  });
+})();
+
+/* ═══════════════════════════════════════════════════════
+   FIELD DEFINITIONS
+═══════════════════════════════════════════════════════ */
+const FIELDS = [
+  { id:'field1', canvas:'ch1', hlId:'hl1', cvId:'cv1', cardId:'card-f1',
+    name:'Light',        unit:'lux', icon:'☀️',  target:60,   mode:'pct'  },
+  { id:'field2', canvas:'ch2', hlId:'hl2', cvId:'cv2', cardId:'card-f2',
+    name:'Target Light', unit:'',   icon:'🎯',  target:0.75, mode:'pct'  },
+  { id:'field3', canvas:'ch3', hlId:'hl3', cvId:'cv3', cardId:'card-f3',
+    name:'Temperature',  unit:'°C', icon:'🌡️', target:25,   mode:'temp' },
+  { id:'field4', canvas:'ch4', hlId:'hl4', cvId:'cv4', cardId:'card-f4',
+    name:'Target Temp',  unit:'°C', icon:'🌡️', target:25,   mode:'temp' },
+];
+const COLORS = ['#F9A825','#66BB6A','#EF5350','42A5F5'.replace(/^/,'#')];
+
+const MSGS = {
+  field1:{ bad:'Too dark here 🌙',      ok:'Getting some light 🌤️',  good:'Soaking it up! ☀️'     },
+  field2:{ bad:'Target too low 📉',     ok:'Target looks fine 🎯',   good:'Perfect target! ✨'    },
+  field3:{ bad:'Temperature off! 🌡️',  ok:'Temperature okay 🌿',    good:'Just right! 🌱'         },
+  field4:{ bad:'Target extreme ⚠️',     ok:'Target is set 🌡️',      good:'Great setting! 👍'      },
+};
+
+/* ═══════════════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════════════ */
+const POLL_MS  = 15000;
+let pollTimer  = null;
+let sinceTimer = null;
+let lastId     = null;
+let lastTime   = null;
+let demoMode   = false;
+let demoSeq    = 20;
+let totalEnt   = 0;
+let charts     = {};
+
+const labels   = [];
+const series   = { field1:[], field2:[], field3:[], field4:[] };
+const latest   = {};
+
+/* ═══════════════════════════════════════════════════════
+   CONFIG  (localStorage)
+═══════════════════════════════════════════════════════ */
+const cfg = {
+  load(){ return JSON.parse(localStorage.getItem('planty2')||'{}'); },
+  save(o){ localStorage.setItem('planty2', JSON.stringify(o)); },
+};
+
+/* ═══════════════════════════════════════════════════════
+   MODAL
+═══════════════════════════════════════════════════════ */
+function openModal(){
+  const s = cfg.load();
+  document.getElementById('inp-ch').value  = s.ch  || '';
+  document.getElementById('inp-key').value = s.key || '';
+  setMStatus('','');
+  document.getElementById('overlay').classList.remove('hidden');
+}
+function closeModal(){ document.getElementById('overlay').classList.add('hidden'); }
+function setMStatus(cls, msg){
+  const el = document.getElementById('modal-status');
+  el.className = 'modal-status' + (cls?' '+cls:'');
+  el.innerHTML = msg;
+}
+function setBusy(on){
+  const b = document.getElementById('btn-conn');
+  b.disabled = on;
+  b.innerHTML = on ? '<div class="spin"></div> Connecting…' : '🔌 Connect';
+}
+
+async function doConnect(){
+  const ch  = document.getElementById('inp-ch').value.trim();
+  const key = document.getElementById('inp-key').value.trim();
+  if(!ch||!key){ setMStatus('err','⚠️ Fill in both fields'); return; }
+  setBusy(true); setMStatus('','');
+  try {
+    const data = await tsGet(`https://api.thingspeak.com/channels/${ch}/feeds.json?api_key=${key}&results=20`);
+    cfg.save({ ch, key });
+    demoMode = false;
+    setMStatus('ok','✅ Connected!');
+    setTimeout(()=>{ closeModal(); launch(data); }, 650);
+  } catch(e) {
+    setMStatus('err','❌ '+(e.message.includes('fetch')?'Cannot reach ThingSpeak — check network':'Wrong Channel ID or API Key'));
+    setBusy(false);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   THINGSPEAK  API
+═══════════════════════════════════════════════════════ */
+async function tsGet(url){
+  const r = await fetch(url);
+  if(!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+/* ═══════════════════════════════════════════════════════
+   DEMO  MODE
+═══════════════════════════════════════════════════════ */
+function demoPoint(date){
+  const h   = date.getHours() + date.getMinutes()/60;
+  const day = Math.max(0, Math.sin((h-6)*Math.PI/12));
+  return {
+    field1: (day*78 + 5 + (Math.random()-.5)*7).toFixed(1),
+    field2: (0.55 + day*.38 + (Math.random()-.5)*.04).toFixed(2),
+    field3: (20 + day*6  + (Math.random()-.5)*1.5).toFixed(1),
+    field4: '25.0',
+  };
+}
+function doDemo(){
+  demoMode = true; demoSeq = 20;
+  const now = Date.now();
+  const feeds = [];
+  for(let i=19;i>=0;i--){
+    const t = new Date(now - i*3*60000);
+    feeds.push({ created_at:t.toISOString(), entry_id:20-i, ...demoPoint(t) });
+  }
+  closeModal();
+  launch({
+    channel:{ name:'Demo Plant 🌿', field1:'Light', field2:'Target Light', field3:'Temperature', field4:'Target Temp' },
+    feeds
+  });
+  toast('🌿 Demo mode — new data every 15 s');
+}
+
+/* ═══════════════════════════════════════════════════════
+   LAUNCH  (first data load)
+═══════════════════════════════════════════════════════ */
+function launch(data){
+  // stop old timers
+  clearInterval(pollTimer);
+  clearInterval(sinceTimer);
+
+  // destroy old charts
+  Object.values(charts).forEach(c=>c.destroy());
+  charts = {};
+  labels.length = 0;
+  FIELDS.forEach(f=>series[f.id].length=0);
+  Object.keys(latest).forEach(k=>delete latest[k]);
+  totalEnt = 0;
+
+  // read channel meta
+  const ch = data.channel || {};
+  document.getElementById('ch-name').textContent = ch.name || 'Your Plant Monitor';
+  FIELDS.forEach(f=>{
+    const n = ch[f.id]; if(n) f.name = n;
+    document.getElementById(f.hlId).textContent = `${f.icon} ${f.name}`;
+  });
+
+  // ingest history
+  (data.feeds||[]).forEach(f=>ingest(f,false));
+  if(data.feeds&&data.feeds.length){
+    lastId   = data.feeds[data.feeds.length-1].entry_id;
+    lastTime = Date.now();
+    totalEnt = lastId;
+  }
+
+  buildCharts();
+  renderCards();
+  refreshHero();
+  setDot('ok');
+  updatePill();
+
+  sinceTimer = setInterval(tickSince, 1000);
+  pollTimer  = setInterval(doPoll, POLL_MS);
+}
+
+/* ═══════════════════════════════════════════════════════
+   INGEST  ONE  FEED
+═══════════════════════════════════════════════════════ */
+function ingest(feed, live){
+  labels.push(fmtTime(feed.created_at));
+  if(labels.length>30) labels.shift();
+
+  FIELDS.forEach(f=>{
+    const raw = feed[f.id];
+    const val = (raw!=null&&raw!=='') ? parseFloat(raw) : null;
+    series[f.id].push(val);
+    if(series[f.id].length>30) series[f.id].shift();
+    if(val!=null) latest[f.id] = val;
+  });
+
+  if(live){
+    lastId   = feed.entry_id;
+    lastTime = Date.now();
+    totalEnt++;
+    updatePill();
+
+    // update chart live-value labels
+    FIELDS.forEach(f=>{
+      const v = latest[f.id];
+      const el = document.getElementById(f.cvId);
+      if(el) el.textContent = v!=null ? `${+v.toFixed(2)} ${f.unit}` : '—';
+    });
+
+    // update charts (no animation — data-driven snap)
+    Object.values(charts).forEach(c=>c.update('none'));
+
+    // ring & update cards
+    FIELDS.forEach(f=>{
+      const card = document.getElementById(f.cardId);
+      if(card){ card.classList.remove('ring'); void card.offsetWidth; card.classList.add('ring'); }
+    });
+    updateCards();
+    refreshHero();
+    setDot('ok');
+    toast('📡 New data from your board!');
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   POLLING
+═══════════════════════════════════════════════════════ */
+async function doPoll(){
+  setDot('wait');
+  try {
+    if(demoMode){
+      demoSeq++;
+      const t = new Date();
+      const feed = { created_at:t.toISOString(), entry_id:demoSeq, ...demoPoint(t) };
+      if(feed.entry_id!==lastId) ingest(feed,true);
+      else setDot('ok');
+    } else {
+      const s = cfg.load();
+      if(!s.ch) return;
+      const feed = await tsGet(`https://api.thingspeak.com/channels/${s.ch}/feeds/last.json?api_key=${s.key}`);
+      if(feed.entry_id&&feed.entry_id!==lastId) ingest(feed,true);
+      else setDot('ok');
+    }
+  } catch(e){
+    setDot('dead');
+    toast('⚠️ Cannot reach ThingSpeak');
+  }
+}
+
+async function doRefresh(){
+  const b = document.getElementById('btn-ref');
+  b.classList.add('shake'); setTimeout(()=>b.classList.remove('shake'),400);
+
+  if(demoMode){ doPoll(); return; }
+
+  const s = cfg.load();
+  if(!s.ch){ openModal(); return; }
+  setDot('wait');
+  try {
+    const data = await tsGet(`https://api.thingspeak.com/channels/${s.ch}/feeds.json?api_key=${s.key}&results=20`);
+    labels.length=0; FIELDS.forEach(f=>series[f.id].length=0);
+    (data.feeds||[]).forEach(f=>ingest(f,false));
+    if(data.feeds&&data.feeds.length) lastId=data.feeds[data.feeds.length-1].entry_id;
+    lastTime=Date.now();
+    Object.values(charts).forEach(c=>c.update());
+    updateCards(); refreshHero(); setDot('ok');
+    toast('✅ Charts refreshed!');
+  } catch(e){ setDot('dead'); toast('⚠️ Refresh failed'); }
+}
+
+/* ═══════════════════════════════════════════════════════
+   CHARTS
+═══════════════════════════════════════════════════════ */
+function buildCharts(){
+  FIELDS.forEach((f,i)=>{
+    const ctx = document.getElementById(f.canvas);
+    if(!ctx) return;
+    const col = COLORS[i];
+    charts[f.id] = new Chart(ctx,{
+      type:'line',
+      data:{
+        labels,
+        datasets:[{
+          data: series[f.id],
+          borderColor: col, backgroundColor: col+'28',
+          fill: true,
+          pointBackgroundColor: col, pointRadius: 3,
+          tension: 0.3, borderWidth: 2, spanGaps: true,
+        }]
+      },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ display:false } },
+        animation:{ duration:600 },
+        scales:{
+          x:{ ticks:{ font:{size:9,family:'Nunito'}, color:'#bbb', maxTicksLimit:6 },
+              grid:{ color:'#f4f4f4' },
+              title:{ display:true, text:'Time', font:{size:9}, color:'#ccc' } },
+          y:{ ticks:{ font:{size:9,family:'Nunito'}, color:'#bbb' },
+              grid:{ color:'#f4f4f4' },
+              title:{ display:true, text:f.unit||f.name, font:{size:9}, color:'#ccc' } },
+        }
+      }
+    });
+    const v = latest[f.id];
+    document.getElementById(f.cvId).textContent = v!=null ? `${+v.toFixed(2)} ${f.unit}` : '—';
+  });
+}
+
+/* ═══════════════════════════════════════════════════════
+   HEALTH  &  MOOD
+═══════════════════════════════════════════════════════ */
+function health(fid){
+  const f = FIELDS.find(x=>x.id===fid);
+  const v = latest[fid];
+  if(v==null) return 0.5;
+  if(f.mode==='temp') return Math.max(0, 1 - Math.abs(v-f.target)/Math.max(f.target*.3,4));
+  return Math.min(Math.max(v/f.target,0),1);
+}
+function mood(h){ return h<.42?'bad':h<.72?'ok':'good'; }
+
+/* ═══════════════════════════════════════════════════════
+   PLANT  SVG  GENERATOR
+═══════════════════════════════════════════════════════ */
+function plantSVG(h){
+  const m  = mood(h);
+  const P  ='#E8935A', PD='#C9724A', PS='#7B5035', ST='#6B4226';
+  const L1 ='#5BAD6F', L2='#4D9E61', L3='#3D8A52';
+
+  /* pot  (shared) */
+  const pot=`
+    <rect x="17" y="83" width="66" height="9" rx="5" fill="${P}"/>
+    <path d="M20,92 L13,134 Q13,139 18,139 L82,139 Q87,139 87,134 L80,92Z" fill="${PD}"/>
+    <path d="M26,93 L19,131" stroke="rgba(255,255,255,.12)" stroke-width="2.5" stroke-linecap="round"/>
+    <ellipse cx="50" cy="87" rx="24" ry="5" fill="${PS}"/>
+    <circle cx="28" cy="120" r="6" fill="#FFB3B3" opacity=".55"/>
+    <circle cx="72" cy="120" r="6" fill="#FFB3B3" opacity=".55"/>`;
+
+  let stem='', face='';
+
+  if(m==='bad'){
+    stem=`
+      <line x1="50" y1="87" x2="50" y2="66" stroke="${ST}" stroke-width="3" stroke-linecap="round"/>
+      <ellipse cx="40" cy="73" rx="12" ry="5.5" fill="${L1}" transform="rotate(-35 40 73)"/>
+      <ellipse cx="60" cy="79" rx="12" ry="5.5" fill="${L1}" transform="rotate(35 60 79)"/>`;
+    face=`
+      <path d="M33,110 Q38,105 43,110" stroke="#5D3A1A" fill="none" stroke-width="2" stroke-linecap="round"/>
+      <path d="M57,110 Q62,105 67,110" stroke="#5D3A1A" fill="none" stroke-width="2" stroke-linecap="round"/>
+      <path d="M40,124 Q50,119 60,124" stroke="#5D3A1A" fill="none" stroke-width="2" stroke-linecap="round"/>`;
+  } else if(m==='ok'){
+    stem=`
+      <path d="M50,87 Q47,64 50,36" stroke="${ST}" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <ellipse cx="37" cy="78" rx="14" ry="6" fill="${L1}" transform="rotate(-28 37 78)"/>
+      <ellipse cx="63" cy="67" rx="14" ry="6" fill="${L2}" transform="rotate(28 63 67)"/>
+      <ellipse cx="39" cy="53" rx="13" ry="6" fill="${L2}" transform="rotate(-32 39 53)"/>
+      <ellipse cx="61" cy="41" rx="13" ry="6" fill="${L3}" transform="rotate(32 61 41)"/>`;
+    face=`
+      <circle cx="39" cy="111" r="4" fill="#5D3A1A"/>
+      <circle cx="61" cy="111" r="4" fill="#5D3A1A"/>
+      <circle cx="40.5" cy="109.5" r="1.5" fill="#fff"/>
+      <circle cx="62.5" cy="109.5" r="1.5" fill="#fff"/>
+      <path d="M38,123 Q50,131 62,123" stroke="#5D3A1A" fill="none" stroke-width="2" stroke-linecap="round"/>`;
+  } else {
+    stem=`
+      <path d="M50,87 Q45,53 50,7" stroke="${ST}" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <ellipse cx="37" cy="78" rx="14" ry="6" fill="${L1}" transform="rotate(-28 37 78)"/>
+      <ellipse cx="63" cy="67" rx="14" ry="6" fill="${L2}" transform="rotate(28 63 67)"/>
+      <ellipse cx="39" cy="53" rx="13" ry="6" fill="${L2}" transform="rotate(-32 39 53)"/>
+      <ellipse cx="61" cy="41" rx="13" ry="6" fill="${L3}" transform="rotate(32 61 41)"/>
+      <ellipse cx="41" cy="28" rx="12" ry="5" fill="${L3}" transform="rotate(-28 41 28)"/>
+      <ellipse cx="59" cy="17" rx="12" ry="5" fill="#2D7A44" transform="rotate(28 59 17)"/>
+      <circle cx="50" cy="7" r="8" fill="#B71C1C"/>
+      <circle cx="50" cy="7" r="5" fill="#E53935"/>`;
+    face=`
+      <line x1="34" y1="107" x2="42" y2="115" stroke="#5D3A1A" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="42" y1="107" x2="34" y2="115" stroke="#5D3A1A" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="58" y1="107" x2="66" y2="115" stroke="#5D3A1A" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="66" y1="107" x2="58" y2="115" stroke="#5D3A1A" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M35,123 Q50,134 65,123" stroke="#5D3A1A" fill="none" stroke-width="2.5" stroke-linecap="round"/>`;
+  }
+  return `<svg viewBox="0 0 100 145" xmlns="http://www.w3.org/2000/svg">${stem}${pot}${face}</svg>`;
+}
+
+/* ═══════════════════════════════════════════════════════
+   RENDER  CARDS  (initial build)
+═══════════════════════════════════════════════════════ */
+function renderCards(){
+  const row = document.getElementById('cards-row');
+  row.innerHTML = '';
+  FIELDS.forEach((f,i)=>{
+    const h = health(f.id), m = mood(h);
+    const v = latest[f.id];
+    const valHtml = v!=null
+      ? `${+v.toFixed(2)}<span class="card-unit"> ${f.unit}</span>`
+      : `<span style="font-size:.85rem;color:#ccc">No data</span>`;
+    const msgText = v!=null ? MSGS[f.id][m] : 'Waiting for data…';
+    const card = document.createElement('div');
+    card.className='card'; card.id=f.cardId;
+    card.onclick=()=>{ card.classList.remove('pop'); void card.offsetWidth; card.classList.add('pop'); };
+    card.innerHTML=`
+      <div class="sbar">
+        <span>Planty</span>
+        <div style="display:flex;gap:3px;align-items:center">
+          <div class="sigbars"><span></span><span></span><span></span><span></span></div>
+          <span style="font-size:.5rem;letter-spacing:1px">⊙▐</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="card-svg" id="svg-${f.id}">${plantSVG(h)}</div>
+        <div class="card-val" id="v-${f.id}">${valHtml}</div>
+        <div class="card-lbl">${f.icon} ${f.name}</div>
+        <div class="card-msg" id="m-${f.id}">${msgText}</div>
+      </div>
+      <div class="card-foot">
+        <div class="dots">${[0,1,2,3].map(j=>`<div class="dot ${j===i?'on':'off'}"></div>`).join('')}</div>
+        <button class="card-skip">${i<3?'Skip →':'Start →'}</button>
+      </div>`;
+    row.appendChild(card);
+  });
+}
+
+function updateCards(){
+  FIELDS.forEach(f=>{
+    const h = health(f.id), m = mood(h);
+    const v = latest[f.id];
+    const svgEl = document.getElementById(`svg-${f.id}`);
+    const valEl = document.getElementById(`v-${f.id}`);
+    const msgEl = document.getElementById(`m-${f.id}`);
+    if(svgEl) svgEl.innerHTML = plantSVG(h);
+    if(valEl) valEl.innerHTML = v!=null
+      ? `${+v.toFixed(2)}<span class="card-unit"> ${f.unit}</span>`
+      : `<span style="font-size:.85rem;color:#ccc">No data</span>`;
+    if(msgEl) msgEl.textContent = v!=null ? MSGS[f.id][m] : 'Waiting for data…';
+    const cvEl = document.getElementById(f.cvId);
+    if(cvEl) cvEl.textContent = v!=null ? `${+v.toFixed(2)} ${f.unit}` : '—';
+  });
+}
+
+function refreshHero(){
+  const avg = FIELDS.reduce((s,f)=>s+health(f.id),0)/FIELDS.length;
+  document.getElementById('hero-sub').textContent =
+    avg>.75 ? 'Your plant is thriving! 🎉' :
+    avg>.42 ? 'Your plant needs a little care 🌿' :
+              'Your plant needs attention! 🆘';
+}
+
+/* ═══════════════════════════════════════════════════════
+   UI  HELPERS
+═══════════════════════════════════════════════════════ */
+function setDot(s){
+  const dot  = document.getElementById('ldot');
+  const text = document.getElementById('ltext');
+  dot.className  = 'live-dot' + (s==='ok'?'':' '+s);
+  text.textContent = s==='ok'?'LIVE':s==='wait'?'POLLING':'OFFLINE';
+}
+function tickSince(){
+  if(!lastTime){ document.getElementById('since').textContent=''; return; }
+  const s = Math.floor((Date.now()-lastTime)/1000);
+  document.getElementById('since').textContent =
+    s<5?'just now':s<60?`${s}s ago`:`${Math.floor(s/60)}m ago`;
+}
+function updatePill(){ document.getElementById('epill').textContent=`${totalEnt} entries`; }
+function fmtTime(iso){ return new Date(iso).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}); }
+
+let toastTmr;
+function toast(msg){
+  const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show');
+  clearTimeout(toastTmr); toastTmr=setTimeout(()=>el.classList.remove('show'),3200);
+}
+
+/* ═══════════════════════════════════════════════════════
+   AUTO-INIT
+═══════════════════════════════════════════════════════ */
+(function init(){
+  const s = cfg.load();
+  renderCards(); // show empty cards right away
+
+  if(s.ch && s.key){
+    document.getElementById('inp-ch').value  = s.ch;
+    document.getElementById('inp-key').value = s.key;
+    setDot('wait');
+    document.getElementById('hero-sub').textContent = 'Loading data from ThingSpeak…';
+
+    tsGet(`https://api.thingspeak.com/channels/${s.ch}/feeds.json?api_key=${s.key}&results=20`)
+      .then(data => launch(data))
+      .catch(()=>{
+        setDot('dead');
+        document.getElementById('hero-sub').textContent = 'Could not connect — check settings';
+        toast('⚠️ Check your Channel ID / API Key');
+        openModal();
+      });
+  } else {
+    openModal();
+  }
+})();
+</script>
+</body>
+</html>
