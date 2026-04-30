@@ -448,6 +448,7 @@ let sinceTimer = null;
 let lastId     = null;
 let lastTime   = null;
 let demoMode   = false;
+let mqttMode   = false;
 let demoSeq    = 20;
 let totalEnt   = 0;
 let charts     = {};
@@ -630,6 +631,7 @@ function ingest(feed, live){
    POLLING
 ═══════════════════════════════════════════════════════ */
 async function doPoll(){
+  if(mqttMode) return; // data is coming from the MQTT bridge
   setDot('wait');
   try {
     if(demoMode){
@@ -871,6 +873,31 @@ function toast(msg){
   const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show');
   clearTimeout(toastTmr); toastTmr=setTimeout(()=>el.classList.remove('show'),3200);
 }
+
+/* ═══════════════════════════════════════════════════════
+   MQTT  BRIDGE  (receives live data from mqtt.html)
+   Both pages must be open in the same browser window.
+═══════════════════════════════════════════════════════ */
+(function(){
+  if(typeof BroadcastChannel === 'undefined') return;
+  const bc = new BroadcastChannel('planty');
+  bc.onmessage = function(e){
+    if(!e.data || e.data.type !== 'mqtt') return;
+    if(!mqttMode){
+      mqttMode = true;
+      demoMode = false;
+      document.getElementById('ch-name').textContent = 'MQTT Live Feed';
+      toast('📡 MQTT bridge connected!');
+    }
+    const f = e.data.fields || {};
+    ingest({
+      created_at: f.created_at || new Date().toISOString(),
+      entry_id:   ++totalEnt,
+      field1: f.field1, field2: f.field2,
+      field3: f.field3, field4: f.field4,
+    }, true);
+  };
+})();
 
 /* ═══════════════════════════════════════════════════════
    AUTO-INIT

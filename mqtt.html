@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Planty – MQTT Bridge 🔌</title>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Nunito', sans-serif;
+      background: #3DBBA0;
+      min-height: 100vh;
+      padding-bottom: 60px;
+    }
+
+    /* ── TOP BAR ── */
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 22px 24px 18px; color: #fff;
+    }
+    .tb-left h1 { font-size: 1.7rem; font-weight: 900; line-height: 1; }
+    .tb-left p  { font-size: .78rem; font-weight: 700; opacity: .8; margin-top: 3px; }
+
+    .status-pill {
+      display: flex; align-items: center; gap: 7px;
+      background: rgba(255,255,255,.2); border-radius: 50px;
+      padding: 6px 16px; font-size: .72rem; font-weight: 900; color: #fff;
+    }
+    .sdot {
+      width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
+      background: #FFD54F;
+    }
+    .sdot.connected    { background: #69F0AE; animation: pulse 1.8s infinite; }
+    .sdot.disconnected { background: #EF5350; animation: none; }
+    .sdot.connecting   { background: #FFD54F; animation: none; }
+    @keyframes pulse { 0%,100%{ opacity:1; transform:scale(1); } 50%{ opacity:.5; transform:scale(1.4); } }
+
+    /* ── LAYOUT ── */
+    .content {
+      max-width: 680px; margin: 0 auto; padding: 0 16px;
+      display: flex; flex-direction: column; gap: 16px;
+    }
+
+    /* ── CARD ── */
+    .card {
+      background: #EDF9F4;
+      border-radius: 24px;
+      box-shadow: 0 10px 36px rgba(0,0,0,.15);
+      overflow: hidden;
+    }
+    .card-head {
+      background: #3DBBA0; color: #fff;
+      padding: 14px 20px;
+      font-size: .92rem; font-weight: 900;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .card-body { padding: 18px 20px; }
+
+    /* ── TABS ── */
+    .tabs {
+      display: flex; gap: 8px; margin-bottom: 18px;
+    }
+    .tab {
+      flex: 1; padding: 9px;
+      border-radius: 12px; border: 2px solid #C8E6C9;
+      background: #fff; color: #2D9F84;
+      font-family: 'Nunito', sans-serif; font-size: .82rem; font-weight: 800;
+      cursor: pointer; transition: all .2s;
+    }
+    .tab.active {
+      background: #3DBBA0; border-color: #3DBBA0; color: #fff;
+    }
+
+    /* ── FORM ELEMENTS ── */
+    .field-group { margin-bottom: 13px; }
+    .field-group label {
+      display: block; font-size: .68rem; font-weight: 800;
+      color: #2D9F84; text-transform: uppercase; letter-spacing: .5px;
+      margin-bottom: 5px;
+    }
+    .field-group input, .field-group select {
+      width: 100%; padding: 10px 14px;
+      border: 2px solid #C8E6C9; border-radius: 12px;
+      font-family: 'Nunito', sans-serif; font-size: .88rem; font-weight: 700;
+      background: #fff; color: #333; outline: none;
+      transition: border-color .2s;
+    }
+    .field-group input:focus, .field-group select:focus { border-color: #3DBBA0; }
+    .field-group input::placeholder { color: #ccc; font-weight: 600; }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    @media(max-width: 500px) { .two-col { grid-template-columns: 1fr; } }
+
+    .tip {
+      font-size: .7rem; color: #888; font-weight: 700;
+      background: #F0FAF6; border-radius: 10px;
+      padding: 9px 13px; margin-bottom: 14px; line-height: 1.5;
+    }
+    .tip strong { color: #2D9F84; }
+
+    /* topic mode radio */
+    .radio-group { display: flex; gap: 16px; margin-bottom: 13px; align-items: center; }
+    .radio-group label {
+      display: flex; align-items: center; gap: 6px;
+      font-size: .82rem; font-weight: 700; color: #444; cursor: pointer;
+      text-transform: none; letter-spacing: 0;
+    }
+    .radio-group input[type=radio] { accent-color: #3DBBA0; width: 16px; height: 16px; }
+
+    .section-label {
+      font-size: .72rem; font-weight: 900; color: #2D9F84;
+      text-transform: uppercase; letter-spacing: .5px;
+      margin: 14px 0 8px; border-top: 1px solid #E0F5EE; padding-top: 12px;
+    }
+
+    /* ── BUTTONS ── */
+    .btn-row { display: flex; gap: 10px; margin-top: 4px; }
+    .btn-primary {
+      flex: 1; padding: 12px; border-radius: 50px; border: none;
+      background: #3DBBA0; color: #fff;
+      font-family: 'Nunito', sans-serif; font-size: .9rem; font-weight: 900;
+      cursor: pointer; transition: background .2s;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-primary:hover { background: #2D9F84; }
+    .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-outline {
+      flex: 1; padding: 12px; border-radius: 50px;
+      border: 2px solid #3DBBA0; background: transparent; color: #3DBBA0;
+      font-family: 'Nunito', sans-serif; font-size: .88rem; font-weight: 800;
+      cursor: pointer; transition: background .2s;
+    }
+    .btn-outline:hover { background: #E0F5EE; }
+    .btn-outline:disabled { opacity: .4; cursor: not-allowed; }
+
+    /* ── STATUS STATS ── */
+    .stats-row {
+      display: flex; gap: 10px; margin-bottom: 12px;
+    }
+    .stat-box {
+      flex: 1; background: #F0FAF6; border-radius: 14px;
+      padding: 12px 14px; text-align: center;
+    }
+    .stat-num { font-size: 1.5rem; font-weight: 900; color: #2D9F84; line-height: 1; }
+    .stat-lbl { font-size: .62rem; font-weight: 800; color: #aaa; text-transform: uppercase; letter-spacing: .4px; margin-top: 3px; }
+
+    /* ── LOG ── */
+    .log-box {
+      background: #1C2B22; border-radius: 14px;
+      max-height: 240px; overflow-y: auto;
+      padding: 12px 14px;
+      font-family: 'Courier New', monospace; font-size: .73rem;
+    }
+    .log-empty { color: #556; font-style: italic; font-size: .75rem; }
+    .log-entry { margin-bottom: 8px; }
+    .log-time  { color: #4CAF50; }
+    .log-topic { color: #81C784; }
+    .log-payload { color: #CFD8DC; word-break: break-all; }
+    .log-err { color: #EF9A9A; }
+
+    /* ── OPEN DASHBOARD FAB ── */
+    .open-dash {
+      display: block; text-align: center; margin: 0 16px;
+      padding: 14px; border-radius: 50px;
+      background: #fff; color: #2D9F84;
+      font-family: 'Nunito', sans-serif; font-size: .95rem; font-weight: 900;
+      text-decoration: none;
+      box-shadow: 0 6px 22px rgba(0,0,0,.12);
+      transition: all .2s;
+    }
+    .open-dash:hover { transform: scale(1.03); box-shadow: 0 10px 28px rgba(0,0,0,.17); }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+<!-- ══ TOP BAR ══ -->
+<div class="topbar">
+  <div class="tb-left">
+    <h1>🔌 MQTT Bridge</h1>
+    <p>Sends live sensor data → Planty dashboard</p>
+  </div>
+  <div class="status-pill">
+    <div class="sdot connecting" id="sdot"></div>
+    <span id="stext">IDLE</span>
+  </div>
+</div>
+
+<div class="content">
+
+  <!-- ══ CONNECTION CONFIG ══ -->
+  <div class="card">
+    <div class="card-head">⚙️ Connection Settings</div>
+    <div class="card-body">
+
+      <div class="tabs">
+        <button class="tab active" id="tab-ts" onclick="switchMode('thingspeak')">ThingSpeak MQTT</button>
+        <button class="tab" id="tab-cu" onclick="switchMode('custom')">Custom Broker</button>
+      </div>
+
+      <!-- ThingSpeak mode -->
+      <div id="panel-thingspeak">
+        <div class="tip">
+          <strong>ThingSpeak MQTT</strong> — Go to <strong>Account → My Profile → MQTT API Key</strong>
+          to find your MQTT key. This is different from the channel Read API key.<br>
+          The broker connects via WebSocket on port 443.
+        </div>
+        <div class="field-group">
+          <label>Channel ID</label>
+          <input id="ts-ch" type="text" placeholder="e.g. 2345678">
+        </div>
+        <div class="field-group">
+          <label>ThingSpeak Username</label>
+          <input id="ts-user" type="text" placeholder="your ThingSpeak username">
+        </div>
+        <div class="field-group">
+          <label>MQTT API Key (from Account → My Profile)</label>
+          <input id="ts-key" type="text" placeholder="e.g. ABCDEF1234567890">
+        </div>
+      </div>
+
+      <!-- Custom broker mode -->
+      <div id="panel-custom" class="hidden">
+        <div class="tip">
+          <strong>Custom Broker</strong> — Your broker must support WebSocket (ws:// or wss://).
+          Mosquitto: enable WebSocket listener on port 9001. HiveMQ public: <strong>ws://broker.hivemq.com:8000/mqtt</strong>
+        </div>
+        <div class="field-group">
+          <label>Broker WebSocket URL</label>
+          <input id="cu-url" type="text" placeholder="ws://192.168.1.x:9001  or  wss://broker.example.com">
+        </div>
+        <div class="two-col">
+          <div class="field-group">
+            <label>Username (optional)</label>
+            <input id="cu-user" type="text" placeholder="leave blank if none">
+          </div>
+          <div class="field-group">
+            <label>Password (optional)</label>
+            <input id="cu-pass" type="password" placeholder="leave blank if none">
+          </div>
+        </div>
+
+        <div class="section-label">Topic Format</div>
+        <div class="radio-group">
+          <label><input type="radio" name="tmode" value="json" checked onchange="switchTopicMode('json')"> Single JSON topic</label>
+          <label><input type="radio" name="tmode" value="perfield" onchange="switchTopicMode('perfield')"> One topic per field</label>
+        </div>
+
+        <!-- JSON topic mode -->
+        <div id="panel-json">
+          <div class="field-group">
+            <label>Topic (publishes a JSON object)</label>
+            <input id="cu-json-topic" type="text" placeholder="e.g.  plant/data">
+          </div>
+          <div class="tip" style="margin-top:-4px">
+            Map JSON keys → Planty fields. Leave blank to use <strong>field1 … field4</strong> directly.
+          </div>
+          <div class="two-col">
+            <div class="field-group">
+              <label>JSON key → Field 1 (Light)</label>
+              <input id="jk1" type="text" placeholder="field1">
+            </div>
+            <div class="field-group">
+              <label>JSON key → Field 2 (Target)</label>
+              <input id="jk2" type="text" placeholder="field2">
+            </div>
+            <div class="field-group">
+              <label>JSON key → Field 3 (Temperature)</label>
+              <input id="jk3" type="text" placeholder="field3">
+            </div>
+            <div class="field-group">
+              <label>JSON key → Field 4 (Target Temp)</label>
+              <input id="jk4" type="text" placeholder="field4">
+            </div>
+          </div>
+        </div>
+
+        <!-- Per-field topic mode -->
+        <div id="panel-perfield" class="hidden">
+          <div class="tip" style="margin-top:-4px">
+            Each topic should publish a <strong>single numeric value</strong> (e.g. <code>23.5</code>).
+          </div>
+          <div class="two-col">
+            <div class="field-group">
+              <label>Field 1 topic (Light)</label>
+              <input id="ft1" type="text" placeholder="plant/light">
+            </div>
+            <div class="field-group">
+              <label>Field 2 topic (Target Light)</label>
+              <input id="ft2" type="text" placeholder="plant/target_light">
+            </div>
+            <div class="field-group">
+              <label>Field 3 topic (Temperature)</label>
+              <input id="ft3" type="text" placeholder="plant/temperature">
+            </div>
+            <div class="field-group">
+              <label>Field 4 topic (Target Temp)</label>
+              <input id="ft4" type="text" placeholder="plant/target_temp">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="btn-row" style="margin-top:18px">
+        <button class="btn-primary" id="btn-conn" onclick="doConnect()">🔌 Connect</button>
+        <button class="btn-outline" id="btn-disc" onclick="doDisconnect()" disabled>✖ Disconnect</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ STATUS ══ -->
+  <div class="card">
+    <div class="card-head">📡 Status</div>
+    <div class="card-body">
+      <div class="stats-row">
+        <div class="stat-box">
+          <div class="stat-num" id="stat-msgs">0</div>
+          <div class="stat-lbl">Messages</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-num" id="stat-last">—</div>
+          <div class="stat-lbl">Last received</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-num" id="stat-broker">—</div>
+          <div class="stat-lbl">Broker</div>
+        </div>
+      </div>
+      <p style="font-size:.75rem;color:#aaa;font-weight:700;text-align:center" id="stat-info">
+        Not connected. Configure settings above and click Connect.
+      </p>
+    </div>
+  </div>
+
+  <!-- ══ MESSAGE LOG ══ -->
+  <div class="card">
+    <div class="card-head">🗒️ Message Log <span style="font-size:.72rem;font-weight:700;opacity:.75;margin-left:auto">last 15 messages</span></div>
+    <div class="card-body" style="padding-top:12px">
+      <div class="log-box" id="log-box">
+        <span class="log-empty">No messages yet — connect and wait for your device to publish.</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══ OPEN DASHBOARD ══ -->
+<div style="max-width:680px;margin:16px auto 0;padding:0 16px">
+  <a class="open-dash" href="dashboard.html">📊 Open Planty Dashboard</a>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════════════ */
+let client     = null;
+let mode       = 'thingspeak';   // 'thingspeak' | 'custom'
+let topicMode  = 'json';         // 'json' | 'perfield'
+let msgCount   = 0;
+let lastMsgAt  = null;
+let sinceTimer = null;
+let logEntries = [];
+
+const BC = (typeof BroadcastChannel !== 'undefined')
+  ? new BroadcastChannel('planty')
+  : null;
+
+/* ═══════════════════════════════════════════════════════
+   CONFIG  (localStorage)
+═══════════════════════════════════════════════════════ */
+const CFG_KEY = 'planty_mqtt_cfg';
+function saveCfg(o) { localStorage.setItem(CFG_KEY, JSON.stringify(o)); }
+function loadCfg()  { return JSON.parse(localStorage.getItem(CFG_KEY) || '{}'); }
+
+function persistForm() {
+  saveCfg({
+    mode,
+    topicMode,
+    ts: {
+      ch:   document.getElementById('ts-ch').value.trim(),
+      user: document.getElementById('ts-user').value.trim(),
+      key:  document.getElementById('ts-key').value.trim(),
+    },
+    cu: {
+      url:       document.getElementById('cu-url').value.trim(),
+      user:      document.getElementById('cu-user').value.trim(),
+      pass:      document.getElementById('cu-pass').value,
+      jsonTopic: document.getElementById('cu-json-topic').value.trim(),
+      jsonKeys:  [
+        document.getElementById('jk1').value.trim(),
+        document.getElementById('jk2').value.trim(),
+        document.getElementById('jk3').value.trim(),
+        document.getElementById('jk4').value.trim(),
+      ],
+      fieldTopics: [
+        document.getElementById('ft1').value.trim(),
+        document.getElementById('ft2').value.trim(),
+        document.getElementById('ft3').value.trim(),
+        document.getElementById('ft4').value.trim(),
+      ],
+    },
+  });
+}
+
+function restoreForm() {
+  const c = loadCfg();
+  if (!c.mode) return;
+
+  switchMode(c.mode, true);
+  if (c.topicMode) switchTopicMode(c.topicMode, true);
+
+  if (c.ts) {
+    document.getElementById('ts-ch').value   = c.ts.ch   || '';
+    document.getElementById('ts-user').value = c.ts.user || '';
+    document.getElementById('ts-key').value  = c.ts.key  || '';
+  }
+  if (c.cu) {
+    document.getElementById('cu-url').value        = c.cu.url       || '';
+    document.getElementById('cu-user').value       = c.cu.user      || '';
+    document.getElementById('cu-pass').value       = c.cu.pass      || '';
+    document.getElementById('cu-json-topic').value = c.cu.jsonTopic || '';
+    const jk = c.cu.jsonKeys    || [];
+    const ft = c.cu.fieldTopics || [];
+    ['jk1','jk2','jk3','jk4'].forEach((id,i) => document.getElementById(id).value = jk[i]||'');
+    ['ft1','ft2','ft3','ft4'].forEach((id,i) => document.getElementById(id).value = ft[i]||'');
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   UI SWITCHES
+═══════════════════════════════════════════════════════ */
+function switchMode(m, silent) {
+  mode = m;
+  document.getElementById('tab-ts').classList.toggle('active', m === 'thingspeak');
+  document.getElementById('tab-cu').classList.toggle('active', m === 'custom');
+  document.getElementById('panel-thingspeak').classList.toggle('hidden', m !== 'thingspeak');
+  document.getElementById('panel-custom').classList.toggle('hidden', m !== 'custom');
+  if (!silent) persistForm();
+}
+
+function switchTopicMode(tm, silent) {
+  topicMode = tm;
+  document.querySelectorAll('input[name=tmode]').forEach(r => r.checked = r.value === tm);
+  document.getElementById('panel-json').classList.toggle('hidden', tm !== 'json');
+  document.getElementById('panel-perfield').classList.toggle('hidden', tm !== 'perfield');
+  if (!silent) persistForm();
+}
+
+/* ═══════════════════════════════════════════════════════
+   STATUS DOT
+═══════════════════════════════════════════════════════ */
+function setStatus(s, label) {
+  const dot  = document.getElementById('sdot');
+  const text = document.getElementById('stext');
+  dot.className  = 'sdot ' + s;
+  text.textContent = label || s.toUpperCase();
+}
+
+/* ═══════════════════════════════════════════════════════
+   BUILD CONNECTION CONFIG
+═══════════════════════════════════════════════════════ */
+function buildConnConfig() {
+  if (mode === 'thingspeak') {
+    const ch   = document.getElementById('ts-ch').value.trim();
+    const user = document.getElementById('ts-user').value.trim();
+    const key  = document.getElementById('ts-key').value.trim();
+    if (!ch || !key) return null;
+    return {
+      brokerUrl: 'wss://mqtt.thingspeak.com',
+      options: {
+        clientId:   'planty_' + Math.random().toString(16).slice(2, 10),
+        username:   user || 'any',
+        password:   key,
+        clean:      true,
+        reconnectPeriod: 6000,
+        connectTimeout:  12000,
+      },
+      topics:     [`channels/${ch}/subscribe/feeds`],
+      parser:     parseThingSpeakPayload,
+      brokerLabel: 'mqtt.thingspeak.com',
+    };
+  }
+
+  // custom
+  const url  = document.getElementById('cu-url').value.trim();
+  const user = document.getElementById('cu-user').value.trim();
+  const pass = document.getElementById('cu-pass').value;
+  if (!url) return null;
+
+  const opts = {
+    clientId:   'planty_' + Math.random().toString(16).slice(2, 10),
+    clean:      true,
+    reconnectPeriod: 6000,
+    connectTimeout:  12000,
+  };
+  if (user) opts.username = user;
+  if (pass) opts.password = pass;
+
+  let topics, parser;
+  if (topicMode === 'json') {
+    const topic = document.getElementById('cu-json-topic').value.trim();
+    if (!topic) return null;
+    const keys = [
+      document.getElementById('jk1').value.trim() || 'field1',
+      document.getElementById('jk2').value.trim() || 'field2',
+      document.getElementById('jk3').value.trim() || 'field3',
+      document.getElementById('jk4').value.trim() || 'field4',
+    ];
+    topics = [topic];
+    parser = (t, p) => parseJsonPayload(p, keys);
+  } else {
+    const fts = [
+      document.getElementById('ft1').value.trim(),
+      document.getElementById('ft2').value.trim(),
+      document.getElementById('ft3').value.trim(),
+      document.getElementById('ft4').value.trim(),
+    ];
+    topics = fts.filter(Boolean);
+    if (!topics.length) return null;
+    parser = (t, p) => parsePerFieldPayload(t, p, fts);
+  }
+
+  const hostMatch = url.match(/\/\/([^/:]+)/);
+  return {
+    brokerUrl:   url,
+    options:     opts,
+    topics,
+    parser,
+    brokerLabel: hostMatch ? hostMatch[1] : url,
+  };
+}
+
+/* ═══════════════════════════════════════════════════════
+   PAYLOAD PARSERS  →  { field1, field2, field3, field4, created_at }
+═══════════════════════════════════════════════════════ */
+function parseThingSpeakPayload(topic, raw) {
+  const data = JSON.parse(raw);
+  return {
+    field1:     data.field1,
+    field2:     data.field2,
+    field3:     data.field3,
+    field4:     data.field4,
+    created_at: data.created_at || new Date().toISOString(),
+    entry_id:   data.entry_id,
+  };
+}
+
+function parseJsonPayload(raw, keys) {
+  const data = JSON.parse(raw);
+  return {
+    field1:     data[keys[0]],
+    field2:     data[keys[1]],
+    field3:     data[keys[2]],
+    field4:     data[keys[3]],
+    created_at: data.created_at || new Date().toISOString(),
+  };
+}
+
+// tracks partial values coming in per-field
+const _perFieldBuffer = {};
+function parsePerFieldPayload(topic, raw, fieldTopics) {
+  const idx = fieldTopics.indexOf(topic);
+  if (idx === -1) return null;
+  _perFieldBuffer['field' + (idx + 1)] = raw.trim();
+  return {
+    field1: _perFieldBuffer.field1,
+    field2: _perFieldBuffer.field2,
+    field3: _perFieldBuffer.field3,
+    field4: _perFieldBuffer.field4,
+    created_at: new Date().toISOString(),
+  };
+}
+
+/* ═══════════════════════════════════════════════════════
+   CONNECT / DISCONNECT
+═══════════════════════════════════════════════════════ */
+function doConnect() {
+  persistForm();
+  const cfg = buildConnConfig();
+  if (!cfg) {
+    alert('Please fill in all required fields before connecting.');
+    return;
+  }
+  if (client) client.end(true);
+
+  setStatus('connecting', 'CONNECTING…');
+  document.getElementById('btn-conn').disabled = true;
+  document.getElementById('stat-broker').textContent = cfg.brokerLabel;
+  document.getElementById('stat-info').textContent   = `Connecting to ${cfg.brokerLabel}…`;
+
+  client = mqtt.connect(cfg.brokerUrl, cfg.options);
+
+  client.on('connect', () => {
+    setStatus('connected', 'CONNECTED');
+    document.getElementById('btn-conn').disabled = false;
+    document.getElementById('btn-disc').disabled = false;
+    document.getElementById('stat-info').textContent = `Connected to ${cfg.brokerLabel}`;
+
+    cfg.topics.forEach(t => {
+      client.subscribe(t, err => {
+        if (err) logErr(`Subscribe failed: ${t} — ${err.message}`);
+        else     logMsg(t, null, '(subscribed)');
+      });
+    });
+
+    clearInterval(sinceTimer);
+    sinceTimer = setInterval(tickSince, 1000);
+  });
+
+  client.on('message', (topic, message) => {
+    const raw = message.toString();
+    try {
+      const fields = cfg.parser(topic, raw);
+      if (!fields) { logMsg(topic, raw, '(ignored — no matching field)'); return; }
+
+      msgCount++;
+      lastMsgAt = Date.now();
+      document.getElementById('stat-msgs').textContent = msgCount;
+
+      if (BC) BC.postMessage({ type: 'mqtt', fields });
+      logMsg(topic, raw, '✓ sent to dashboard');
+    } catch(e) {
+      logErr(`Parse error on [${topic}]: ${e.message}\n  Payload: ${raw}`);
+    }
+  });
+
+  client.on('error', err => {
+    setStatus('disconnected', 'ERROR');
+    document.getElementById('btn-conn').disabled = false;
+    document.getElementById('stat-info').textContent = `Error: ${err.message}`;
+    logErr('Connection error: ' + err.message);
+  });
+
+  client.on('close', () => {
+    if (document.getElementById('stext').textContent !== 'ERROR') {
+      setStatus('disconnected', 'DISCONNECTED');
+      document.getElementById('stat-info').textContent = 'Disconnected.';
+    }
+    document.getElementById('btn-conn').disabled = false;
+    document.getElementById('btn-disc').disabled = true;
+  });
+
+  client.on('reconnect', () => {
+    setStatus('connecting', 'RECONNECTING…');
+    document.getElementById('stat-info').textContent = `Reconnecting to ${cfg.brokerLabel}…`;
+  });
+}
+
+function doDisconnect() {
+  if (!client) return;
+  client.end(true);
+  client = null;
+  clearInterval(sinceTimer);
+  setStatus('disconnected', 'DISCONNECTED');
+  document.getElementById('btn-conn').disabled = false;
+  document.getElementById('btn-disc').disabled = true;
+  document.getElementById('stat-info').textContent = 'Manually disconnected.';
+}
+
+/* ═══════════════════════════════════════════════════════
+   SINCE TIMER
+═══════════════════════════════════════════════════════ */
+function tickSince() {
+  if (!lastMsgAt) { document.getElementById('stat-last').textContent = '—'; return; }
+  const s = Math.floor((Date.now() - lastMsgAt) / 1000);
+  document.getElementById('stat-last').textContent =
+    s < 5  ? 'just now' :
+    s < 60 ? `${s}s ago` :
+             `${Math.floor(s/60)}m ago`;
+}
+
+/* ═══════════════════════════════════════════════════════
+   LOG
+═══════════════════════════════════════════════════════ */
+function logMsg(topic, payload, note) {
+  addLog({ topic, payload, note, error: false });
+}
+function logErr(msg) {
+  addLog({ topic: null, payload: msg, note: null, error: true });
+}
+function addLog(entry) {
+  entry.time = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  logEntries.unshift(entry);
+  if (logEntries.length > 15) logEntries.pop();
+  renderLog();
+}
+function renderLog() {
+  const box = document.getElementById('log-box');
+  if (!logEntries.length) {
+    box.innerHTML = '<span class="log-empty">No messages yet — connect and wait for your device to publish.</span>';
+    return;
+  }
+  box.innerHTML = logEntries.map(e => {
+    if (e.error) return `<div class="log-entry"><span class="log-time">[${e.time}]</span> <span class="log-err">${escHtml(e.payload)}</span></div>`;
+    const payloadHtml = e.payload
+      ? `<br><span class="log-payload">&nbsp;&nbsp;${escHtml(e.payload.length > 200 ? e.payload.slice(0, 200) + '…' : e.payload)}</span>`
+      : '';
+    return `<div class="log-entry">
+      <span class="log-time">[${e.time}]</span>
+      <span class="log-topic"> ${escHtml(e.topic)}</span>
+      <span style="color:#888"> ${escHtml(e.note||'')}</span>${payloadHtml}
+    </div>`;
+  }).join('');
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* ═══════════════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════════════ */
+restoreForm();
+renderLog();
+
+if (!BC) {
+  document.getElementById('stat-info').textContent =
+    '⚠️ BroadcastChannel not supported in this browser — dashboard won\'t receive data.';
+}
+</script>
+</body>
+</html>
