@@ -300,6 +300,59 @@
     }
     .toast.show { transform: translateX(-50%) translateY(0); }
 
+    /* ─── MANUAL OVERRIDE ─────────────────────────────── */
+    .override-wrap {
+      position: relative; z-index: 1;
+      padding: 0 16px 28px;
+    }
+    .override-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .override-title { font-size: 1rem; font-weight: 900; color: #fff; }
+    .override-warn  {
+      font-size: .68rem; font-weight: 800; color: rgba(255,255,255,.75);
+      background: rgba(255,255,255,.18); border-radius: 20px; padding: 3px 11px;
+    }
+    .override-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 12px; max-width: 860px; margin: 0 auto;
+    }
+    @media(max-width: 700px){ .override-grid { grid-template-columns: repeat(2,1fr); } }
+    @media(max-width: 400px){ .override-grid { grid-template-columns: 1fr 1fr; } }
+
+    .ctrl-card {
+      background: #EDF9F4; border-radius: 20px;
+      box-shadow: 0 6px 20px rgba(0,0,0,.13);
+      padding: 14px 12px 12px;
+      display: flex; flex-direction: column; align-items: center; gap: 5px;
+    }
+    .ctrl-icon { font-size: 1.7rem; }
+    .ctrl-name {
+      font-size: .68rem; font-weight: 900; color: #2D9F84;
+      text-transform: uppercase; letter-spacing: .4px; text-align: center;
+    }
+    .ctrl-status {
+      font-size: .62rem; font-weight: 800;
+      padding: 2px 10px; border-radius: 20px;
+      background: #E0E0E0; color: #888;
+      transition: background .3s, color .3s;
+    }
+    .ctrl-status.active   { background: #C8F5E3; color: #1B6B45; }
+    .ctrl-status.inactive { background: #FFCDD2; color: #B71C1C; }
+
+    .ctrl-btns { display: flex; gap: 7px; width: 100%; margin-top: 3px; }
+    .ctrl-btn {
+      flex: 1; padding: 7px 2px; border-radius: 10px; border: 2px solid transparent;
+      font-family: 'Nunito', sans-serif; font-size: .7rem; font-weight: 900;
+      cursor: pointer; transition: all .2s;
+    }
+    .ctrl-btn.on  { background: #3DBBA0; color: #fff; border-color: #3DBBA0; }
+    .ctrl-btn.off { background: transparent; border-color: #EF5350; color: #EF5350; }
+    .ctrl-btn.on:hover  { background: #2D9F84; border-color: #2D9F84; }
+    .ctrl-btn.off:hover { background: #FFEBEE; }
+    .ctrl-btn:disabled  { opacity: .4; cursor: not-allowed; }
+
     /* ─── DROPS ────────────────────────────────────────── */
     .drop {
       position: fixed; pointer-events: none; z-index: 999;
@@ -316,24 +369,20 @@
   <div class="modal">
     <div class="modal-top">
       <div class="modal-icon">🌱</div>
-      <h2>Connect to ThingSpeak</h2>
-      <p>Your board sends data → we show it live here</p>
+      <h2>Connect to Planty Server</h2>
+      <p>Your Raspberry Pi runs a local Flask server</p>
     </div>
     <div class="modal-body">
       <div class="field-group">
-        <label>Channel ID</label>
-        <input id="inp-ch" type="text" placeholder="e.g.  2345678" autocomplete="off">
+        <label>Server URL</label>
+        <input id="inp-url" type="text" placeholder="http://192.168.1.x:5000" autocomplete="off">
       </div>
-      <div class="field-group">
-        <label>Read API Key</label>
-        <input id="inp-key" type="text" placeholder="e.g.  ABCDEF1234567890" autocomplete="off">
-      </div>
-      <p class="modal-tip">💡 ThingSpeak → My Channels → your channel → API Keys tab</p>
+      <p class="modal-tip">💡 Find the Pi's IP with <strong>hostname -I</strong> in its terminal. Both devices must be on the same Wi-Fi network.</p>
       <div class="modal-status" id="modal-status"></div>
     </div>
     <div class="modal-btns">
       <button class="btn-primary" id="btn-conn" onclick="doConnect()">🔌 Connect</button>
-      <button class="btn-outline" onclick="doDemo()">🌿 Demo Mode — no account needed</button>
+      <button class="btn-outline" onclick="doDemo()">🌿 Demo Mode — no server needed</button>
     </div>
   </div>
 </div>
@@ -367,6 +416,52 @@
   <button class="fab" onclick="openModal()">⚙️ Settings</button>
 </div>
 
+<!-- ═══════════════ MANUAL OVERRIDE ══════════════ -->
+<div class="override-wrap">
+  <div class="override-header">
+    <span class="override-title">⚡ Manual Override</span>
+    <span class="override-warn">⚠️ Direct hardware control</span>
+  </div>
+  <div class="override-grid">
+    <div class="ctrl-card">
+      <div class="ctrl-icon">💧</div>
+      <div class="ctrl-name">Water Pump</div>
+      <div class="ctrl-status" id="cs-pump">UNKNOWN</div>
+      <div class="ctrl-btns">
+        <button class="ctrl-btn on"  onclick="sendControl('pump','on')">ON</button>
+        <button class="ctrl-btn off" onclick="sendControl('pump','off')">OFF</button>
+      </div>
+    </div>
+    <div class="ctrl-card">
+      <div class="ctrl-icon">🪟</div>
+      <div class="ctrl-name">Window</div>
+      <div class="ctrl-status" id="cs-window">UNKNOWN</div>
+      <div class="ctrl-btns">
+        <button class="ctrl-btn on"  onclick="sendControl('window','open')">OPEN</button>
+        <button class="ctrl-btn off" onclick="sendControl('window','close')">CLOSE</button>
+      </div>
+    </div>
+    <div class="ctrl-card">
+      <div class="ctrl-icon">💡</div>
+      <div class="ctrl-name">Grow Light</div>
+      <div class="ctrl-status" id="cs-light">UNKNOWN</div>
+      <div class="ctrl-btns">
+        <button class="ctrl-btn on"  onclick="sendControl('light','on')">ON</button>
+        <button class="ctrl-btn off" onclick="sendControl('light','off')">OFF</button>
+      </div>
+    </div>
+    <div class="ctrl-card">
+      <div class="ctrl-icon">🌀</div>
+      <div class="ctrl-name">Fan</div>
+      <div class="ctrl-status" id="cs-fan">UNKNOWN</div>
+      <div class="ctrl-btns">
+        <button class="ctrl-btn on"  onclick="sendControl('fan','on')">ON</button>
+        <button class="ctrl-btn off" onclick="sendControl('fan','off')">OFF</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ═══════════════ CHARTS ════════════════════════ -->
 <div class="charts-wrap">
   <div class="charts-header">
@@ -377,22 +472,22 @@
     <div class="chart-tile">
       <div class="chart-head"><span id="hl1">☀️ Field 1</span><span class="chart-cur" id="cv1">—</span></div>
       <div class="chart-body"><canvas id="ch1"></canvas></div>
-      <div class="chart-foot">Planty · ThingSpeak</div>
+      <div class="chart-foot">Planty · Raspberry Pi</div>
     </div>
     <div class="chart-tile">
       <div class="chart-head"><span id="hl2">🎯 Field 2</span><span class="chart-cur" id="cv2">—</span></div>
       <div class="chart-body"><canvas id="ch2"></canvas></div>
-      <div class="chart-foot">Planty · ThingSpeak</div>
+      <div class="chart-foot">Planty · Raspberry Pi</div>
     </div>
     <div class="chart-tile">
       <div class="chart-head"><span id="hl3">🌡️ Field 3</span><span class="chart-cur" id="cv3">—</span></div>
       <div class="chart-body"><canvas id="ch3"></canvas></div>
-      <div class="chart-foot">Planty · ThingSpeak</div>
+      <div class="chart-foot">Planty · Raspberry Pi</div>
     </div>
     <div class="chart-tile">
       <div class="chart-head"><span id="hl4">💧 Field 4</span><span class="chart-cur" id="cv4">—</span></div>
       <div class="chart-body"><canvas id="ch4"></canvas></div>
-      <div class="chart-foot">Planty · ThingSpeak</div>
+      <div class="chart-foot">Planty · Raspberry Pi</div>
     </div>
   </div>
 </div>
@@ -461,8 +556,8 @@ const latest   = {};
    CONFIG  (localStorage)
 ═══════════════════════════════════════════════════════ */
 const cfg = {
-  load(){ return JSON.parse(localStorage.getItem('planty2')||'{}'); },
-  save(o){ localStorage.setItem('planty2', JSON.stringify(o)); },
+  load(){ return JSON.parse(localStorage.getItem('planty_server')||'{}'); },
+  save(o){ localStorage.setItem('planty_server', JSON.stringify(o)); },
 };
 
 /* ═══════════════════════════════════════════════════════
@@ -470,8 +565,7 @@ const cfg = {
 ═══════════════════════════════════════════════════════ */
 function openModal(){
   const s = cfg.load();
-  document.getElementById('inp-ch').value  = s.ch  || '';
-  document.getElementById('inp-key').value = s.key || '';
+  document.getElementById('inp-url').value = s.url || '';
   setMStatus('','');
   document.getElementById('overlay').classList.remove('hidden');
 }
@@ -488,26 +582,30 @@ function setBusy(on){
 }
 
 async function doConnect(){
-  const ch  = document.getElementById('inp-ch').value.trim();
-  const key = document.getElementById('inp-key').value.trim();
-  if(!ch||!key){ setMStatus('err','⚠️ Fill in both fields'); return; }
+  const url = document.getElementById('inp-url').value.trim().replace(/\/+$/, '');
+  if(!url){ setMStatus('err','⚠️ Enter the server URL'); return; }
   setBusy(true); setMStatus('','');
   try {
-    const data = await tsGet(`https://api.thingspeak.com/channels/${ch}/feeds.json?api_key=${key}&results=20`);
-    cfg.save({ ch, key });
+    const data = await apiGet(`${url}/api/data?results=20`);
+    cfg.save({ url });
     demoMode = false;
     setMStatus('ok','✅ Connected!');
-    setTimeout(()=>{ closeModal(); launch(data); }, 650);
+    setTimeout(()=>{ closeModal(); launch(data); fetchCtrlStatus(); }, 650);
   } catch(e) {
-    setMStatus('err','❌ '+(e.message.includes('fetch')?'Cannot reach ThingSpeak — check network':'Wrong Channel ID or API Key'));
+    setMStatus('err','❌ Cannot reach server — check the URL and Wi-Fi');
     setBusy(false);
   }
 }
 
 /* ═══════════════════════════════════════════════════════
-   THINGSPEAK  API
+   FLASK  SERVER  API
+   Expected endpoints on the Raspberry Pi:
+     GET  /api/data?results=N  → { channel:{name}, feeds:[{field1..4, created_at, entry_id}] }
+     GET  /api/data/last       → { field1..4, created_at, entry_id }
+     GET  /api/status          → { controls:{pump,window,light,fan} }
+     POST /api/control         → body: { action, value }  → { status:"ok" }
 ═══════════════════════════════════════════════════════ */
-async function tsGet(url){
+async function apiGet(url){
   const r = await fetch(url);
   if(!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
@@ -642,14 +740,14 @@ async function doPoll(){
       else setDot('ok');
     } else {
       const s = cfg.load();
-      if(!s.ch) return;
-      const feed = await tsGet(`https://api.thingspeak.com/channels/${s.ch}/feeds/last.json?api_key=${s.key}`);
+      if(!s.url) return;
+      const feed = await apiGet(`${s.url}/api/data/last`);
       if(feed.entry_id&&feed.entry_id!==lastId) ingest(feed,true);
       else setDot('ok');
     }
   } catch(e){
     setDot('dead');
-    toast('⚠️ Cannot reach ThingSpeak');
+    toast('⚠️ Cannot reach Planty server');
   }
 }
 
@@ -660,10 +758,10 @@ async function doRefresh(){
   if(demoMode){ doPoll(); return; }
 
   const s = cfg.load();
-  if(!s.ch){ openModal(); return; }
+  if(!s.url){ openModal(); return; }
   setDot('wait');
   try {
-    const data = await tsGet(`https://api.thingspeak.com/channels/${s.ch}/feeds.json?api_key=${s.key}&results=20`);
+    const data = await apiGet(`${s.url}/api/data?results=20`);
     labels.length=0; FIELDS.forEach(f=>series[f.id].length=0);
     (data.feeds||[]).forEach(f=>ingest(f,false));
     if(data.feeds&&data.feeds.length) lastId=data.feeds[data.feeds.length-1].entry_id;
@@ -875,6 +973,59 @@ function toast(msg){
 }
 
 /* ═══════════════════════════════════════════════════════
+   MANUAL  OVERRIDE  CONTROLS
+   POST /api/control  →  { action: string, value: string }
+   Flask should respond: { status: "ok", action, value }
+═══════════════════════════════════════════════════════ */
+async function sendControl(action, value){
+  const s = cfg.load();
+  if(demoMode || !s.url){
+    toast('⚠️ Connect to server first to use controls');
+    return;
+  }
+
+  const btns = document.querySelectorAll(
+    `.ctrl-btn[onclick*="'${action}'"]`
+  );
+  btns.forEach(b => { b.disabled = true; b.style.opacity = '.5'; });
+
+  try {
+    const r = await fetch(`${s.url}/api/control`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ action, value }),
+    });
+    if(!r.ok) throw new Error(`HTTP ${r.status}`);
+    updateCtrlStatus(action, value);
+    const label = action.charAt(0).toUpperCase() + action.slice(1);
+    toast(`✅ ${label} → ${value.toUpperCase()}`);
+  } catch(e){
+    toast(`❌ Control failed: ${e.message}`);
+  } finally {
+    btns.forEach(b => { b.disabled = false; b.style.opacity = ''; });
+  }
+}
+
+function updateCtrlStatus(action, value){
+  const el = document.getElementById(`cs-${action}`);
+  if(!el) return;
+  const active = (value === 'on' || value === 'open');
+  el.textContent = value.toUpperCase();
+  el.className   = 'ctrl-status ' + (active ? 'active' : 'inactive');
+}
+
+async function fetchCtrlStatus(){
+  const s = cfg.load();
+  if(!s.url) return;
+  try {
+    const data = await apiGet(`${s.url}/api/status`);
+    if(data && data.controls){
+      Object.entries(data.controls).forEach(([k, v]) => updateCtrlStatus(k, v));
+    }
+  } catch(e){ /* /api/status is optional — silently skip if not implemented yet */ }
+}
+
+/* ═══════════════════════════════════════════════════════
    MQTT  BRIDGE  (receives live data from mqtt.html)
    Both pages must be open in the same browser window.
 ═══════════════════════════════════════════════════════ */
@@ -906,18 +1057,17 @@ function toast(msg){
   const s = cfg.load();
   renderCards(); // show empty cards right away
 
-  if(s.ch && s.key){
-    document.getElementById('inp-ch').value  = s.ch;
-    document.getElementById('inp-key').value = s.key;
+  if(s.url){
+    document.getElementById('inp-url').value = s.url;
     setDot('wait');
-    document.getElementById('hero-sub').textContent = 'Loading data from ThingSpeak…';
+    document.getElementById('hero-sub').textContent = 'Loading data from Planty server…';
 
-    tsGet(`https://api.thingspeak.com/channels/${s.ch}/feeds.json?api_key=${s.key}&results=20`)
-      .then(data => launch(data))
+    apiGet(`${s.url}/api/data?results=20`)
+      .then(data => { launch(data); fetchCtrlStatus(); })
       .catch(()=>{
         setDot('dead');
-        document.getElementById('hero-sub').textContent = 'Could not connect — check settings';
-        toast('⚠️ Check your Channel ID / API Key');
+        document.getElementById('hero-sub').textContent = 'Could not connect — check server URL';
+        toast('⚠️ Check the server URL in Settings');
         openModal();
       });
   } else {
