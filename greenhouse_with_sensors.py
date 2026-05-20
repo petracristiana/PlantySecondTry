@@ -1,182 +1,285 @@
-# Import required libraries
+import paho.mqtt.client as mqtt
+import json
+
 import time
 import board
 import busio
 import digitalio
 
-# SENSOR IMPORTS
 import adafruit_mcp3xxx.mcp3008 as MCP
 from adafruit_mcp3xxx.analog_in import AnalogIn
 import adafruit_bmp280
 import adafruit_hcsr04
 
-# -------------------------------
-# SENSOR INITIALIZATION
-# -------------------------------
-# 1. SPI & MCP3008 (Analog Sensors)
-spi = busio.SPI(clock=board.SCK, MISO=board.MISO, MOSI=board.MOSI)
+# SPI setup for analog sensors
+spi = busio.SPI(
+    clock=board.SCK,
+    MISO=board.MISO,
+    MOSI=board.MOSI
+)
+
 cs = digitalio.DigitalInOut(board.D21)
+
 mcp = MCP.MCP3008(spi, cs)
+
 soil_sensor = AnalogIn(mcp, MCP.P0)
 light_sensor = AnalogIn(mcp, MCP.P1)
 
-# 2. I2C & BMP280 (Temp/Pressure)
-i2c = busio.I2C(board.SCL, board.SDA)
+# I2C setup for BMP280
+i2c = busio.I2C(
+    board.SCL,
+    board.SDA
+)
+
 bmp280 = adafruit_bmp280.Adafruit_BMP280_I2C(i2c)
-bmp280.sea_level_pressure = 1013.25 
 
-# 3. HC-SR04 (Ultrasonic)
-sonar = adafruit_hcsr04.HCSR04(trigger_pin=board.D25, echo_pin=board.D24)
+bmp280.sea_level_pressure = 1013.25
 
-# -------------------------------
-# NORMALIZATION FUNCTIONS
-# -------------------------------
+# Ultrasonic sensor setup
+sonar = adafruit_hcsr04.HCSR04(
+    trigger_pin=board.D25,
+    echo_pin=board.D24
+)
+
+# MQTT settings
+broker = "broker.hivemq.com"
+port = 1883
+topic = "plant/data"
+
+client = mqtt.Client(
+    mqtt.CallbackAPIVersion.VERSION1
+)
+
+client.connect(
+    broker,
+    port,
+    60
+)
+
+# MQTT connection check
+if client.is_connected():
+
+    print("✅ MQTT BROKER CONNECTED")
+
+else:
+
+    print("❌ MQTT NOT CONNECTED")
+
+# Convert soil value to percentage
 def normalize_soil_moisture(raw_value):
-    SOIL_DRY = 28000  # <--- CALIBRATE ME! Replace with your dry value
-    SOIL_WET = 52000  # <--- CALIBRATE ME! Replace with your wet value
-    if SOIL_DRY == SOIL_WET: return 0.0
-    percentage = ((SOIL_DRY - raw_value) / (SOIL_DRY - SOIL_WET)) * 100
-    return max(0, min(100, round(percentage, 1)))
 
+    SOIL_DRY = 28000
+    SOIL_WET = 52000
+
+    if SOIL_DRY == SOIL_WET:
+        return 0.0
+
+    percentage = (
+        (SOIL_DRY - raw_value)
+        / (SOIL_DRY - SOIL_WET)
+    ) * 100
+
+    return max(
+        0,
+        min(100, round(percentage, 1))
+    )
+
+# Convert light value to percentage
 def normalize_light(raw_value):
-    LIGHT_DARK = 5000   # <--- CALIBRATE ME! Raw value when completely covered
-    LIGHT_BRIGHT = 60000 # <--- CALIBRATE ME! Raw value under a bright flashlight
-    if LIGHT_BRIGHT == LIGHT_DARK: return 0.0
-    percentage = ((raw_value - LIGHT_DARK) / (LIGHT_BRIGHT - LIGHT_DARK)) * 100
-    return max(0, min(100, round(percentage, 1)))
 
-# -------------------------------
-# CONSTANTS (Threshold values)
-# -------------------------------
-# These values define system conditions using our new 0-100% scales!
-SOIL_THRESHOLD = 40      # If soil moisture < 40% → soil is dry
-TEMP_THRESHOLD = 25      # If temperature > 25C → too hot
-LIGHT_THRESHOLD = 30     # If light < 30% → too dark
-WATER_MAX_DISTANCE = 15  # If distance > 15cm → tank is empty! (Change from WATER_MIN)
+    LIGHT_DARK = 5000
+    LIGHT_BRIGHT = 60000
 
-# -------------------------------
-# REAL SENSOR READING FUNCTION
-# -------------------------------
-# This function pulls live data from the physical sensors
+    if LIGHT_BRIGHT == LIGHT_DARK:
+        return 0.0
+
+    percentage = (
+        (raw_value - LIGHT_DARK)
+        / (LIGHT_BRIGHT - LIGHT_DARK)
+    ) * 100
+
+    return max(
+        0,
+        min(100, round(percentage, 1))
+    )
+
+# Threshold values
+SOIL_THRESHOLD = 40
+TEMP_THRESHOLD = 25
+LIGHT_THRESHOLD = 30
+WATER_MAX_DISTANCE = 15
+
+# Read all sensor values
 def read_sensors():
-    # Read Soil
-    soil = normalize_soil_moisture(soil_sensor.value)
-    
-    # Read Temp
-    temp = round(bmp280.temperature, 1)
-    
-    # Read Light
-    light = normalize_light(light_sensor.value)
-    
-    # Read Ultrasonic
+
+    soil = normalize_soil_moisture(
+        soil_sensor.value
+    )
+
+    temp = round(
+        bmp280.temperature,
+        1
+    )
+
+    light = normalize_light(
+        light_sensor.value
+    )
+
     try:
-        water_distance = round(sonar.distance, 1)
+
+        water_distance = round(
+            sonar.distance,
+            1
+        )
+
     except RuntimeError:
-        # Ultrasonic sensors occasionally fail to read an echo
-        water_distance = 99.9 # Safe fallback if error
-        
+
+        water_distance = 99.9
+
     return soil, temp, light, water_distance
 
-# -------------------------------
-# MAIN LOGIC FUNCTION
-# -------------------------------
-# This function acts as the "brain" of the system
-# It takes sensor values and decides actions
-def greenhouse_logic(soil, temp, light, water_dist):
+# Greenhouse automation logic
+def greenhouse_logic(
+    soil,
+    temp,
+    light,
+    water_dist
+):
 
-    # Default states (everything OFF initially)
     pump = False
     window = False
     led = False
 
-    # Pump control logic with safety condition
-    # Pump turns ON only if:
-    # 1. Soil is dry
-    # 2. Water tank is NOT empty (distance to water is LESS than max distance)
-    if water_dist < WATER_MAX_DISTANCE and soil < SOIL_THRESHOLD:
+    # Turn ON pump if soil is dry
+    if (
+        water_dist < WATER_MAX_DISTANCE
+        and soil < SOIL_THRESHOLD
+    ):
         pump = True
 
-    # Temperature control logic
-    # If temperature is high → open window for ventilation
+    # Open window if temperature is high
     if temp > TEMP_THRESHOLD:
         window = True
 
-    # Light control logic
-    # If light is low → turn ON LED
+    # Turn ON LED if light is low
     if light < LIGHT_THRESHOLD:
         led = True
 
-    # Return all actuator states
     return pump, window, led
 
-# -------------------------------
-# AI LOGIC FUNCTION
-# -------------------------------
-# This function analyzes soil trend and predicts drying behavior
-def soil_prediction(current, previous):
+# Predict soil drying trend
+def soil_prediction(
+    current,
+    previous
+):
 
-    # If no previous value exists → cannot predict yet
     if previous is None:
         return "No prediction yet"
 
-    # If current soil value is less than previous → soil is drying
     if current < previous:
 
-        # Calculate how much soil moisture decreased
         change = previous - current
 
-        # Avoid division by zero
         if change > 0:
 
-            # Estimate how many cycles until soil becomes dry
             time_to_dry = current / change
 
-            return f"Soil drying ↓ | Time to dry: {round(time_to_dry,1)} cycles"
+            return (
+                f"Soil drying ↓ | "
+                f"Time to dry: "
+                f"{round(time_to_dry,1)} cycles"
+            )
 
-    # If soil is not decreasing → stable or increasing
     return "Soil stable ↑"
 
-# -------------------------------
-# MAIN LOOP (RUNS FOREVER)
-# -------------------------------
+# Store previous soil value
+previous_soil = None
 
-previous_soil = None   # Store previous soil value for AI comparison
-
+# Main program loop
 while True:
 
-    # Step 1: Read sensor values (currently simulated)
+    # Read sensor data
     soil, temp, light, water = read_sensors()
 
-    # Step 2: Apply decision logic
-    pump, window, led = greenhouse_logic(soil, temp, light, water)
+    # Create MQTT payload
+    payload = {
 
-    # Step 3: Run AI prediction
-    prediction = soil_prediction(soil, previous_soil)
+        "soil": soil,
+        "temperature": temp,
+        "light": light,
+        "water": water
 
-    # Step 4: Save current soil value for next cycle
+    }
+
+    # Send data to MQTT broker
+    try:
+
+        result = client.publish(
+            topic,
+            json.dumps(payload)
+        )
+
+        status = result[0]
+
+        if status == 0:
+
+            print("📡 MQTT DATA SENT SUCCESSFULLY")
+
+        else:
+
+            print("❌ MQTT SEND FAILED")
+
+    except Exception as e:
+
+        print(f"❌ MQTT ERROR: {e}")
+
+    # Apply greenhouse logic
+    pump, window, led = greenhouse_logic(
+        soil,
+        temp,
+        light,
+        water
+    )
+
+    # Run AI prediction
+    prediction = soil_prediction(
+        soil,
+        previous_soil
+    )
+
     previous_soil = soil
 
-    # Step 5: Print sensor data clearly
-    print("\n==============================")
+    # Print sensor data
+    print("\n================================")
     print("        SENSOR DATA")
-    print("==============================")
-    print(f"Soil Moisture : {soil}")   # Current soil moisture
-    print(f"Temperature   : {temp}")   # Current temperature
-    print(f"Light Level   : {light}")  # Current light intensity
-    print(f"Water Level   : {water}")  # Current water level
+    print("================================")
 
-    # Step 6: Print AI prediction
+    print(f"Soil Moisture : {soil}")
+    print(f"Temperature   : {temp}")
+    print(f"Light Level   : {light}")
+    print(f"Water Level   : {water}")
+
     print("\n--- AI PREDICTION ---")
     print(prediction)
 
-    # Step 7: Print system actions
     print("\n--- SYSTEM ACTIONS ---")
-    print(f"Pump   : {'ON ' if pump else 'OFF'}")          # Pump status
-    print(f"Window : {'OPEN ' if window else 'CLOSED'}")  # Window status
-    print(f"LED    : {'ON ' if led else 'OFF'}")           # LED status
 
-    print("==============================\n")
+    print(
+        f"Pump   : "
+        f"{'ON' if pump else 'OFF'}"
+    )
 
-    # Step 8: Wait 2 seconds before next cycle
+    print(
+        f"Window : "
+        f"{'OPEN' if window else 'CLOSED'}"
+    )
+
+    print(
+        f"LED    : "
+        f"{'ON' if led else 'OFF'}"
+    )
+
+    print("================================\n")
+
+    # Wait before next cycle
     time.sleep(2)
-# I will replace the sensor simulation with actual sensor code in the future, but for now this allows us to test the logic and AI prediction effectively.
